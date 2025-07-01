@@ -58,10 +58,40 @@ resource "aws_security_group" "Jenkins-sg" {
   }
 }
 
+# Data source to get the default VPC
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Data source to get the default subnet
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+# Data source for latest Ubuntu AMI
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 resource "aws_instance" "web" {
-  ami                    = "ami-0df4b2961410d4cff"
-  instance_type          = "t2.medium"
-  key_name               = "mumbai-mac"
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.large"
+  key_name               = "WaleedMac1"
+  subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.Jenkins-sg.id]
   user_data              = templatefile("./install_jenkins.sh", {})
   iam_instance_profile   = aws_iam_instance_profile.example_profile.name
@@ -73,4 +103,30 @@ resource "aws_instance" "web" {
   root_block_device {
     volume_size = 30
   }
+}
+
+# Outputs
+output "instance_id" {
+  description = "ID of the EC2 instance"
+  value       = aws_instance.web.id
+}
+
+output "public_ip" {
+  description = "Public IP address of the EC2 instance"
+  value       = aws_instance.web.public_ip
+}
+
+output "public_dns" {
+  description = "Public DNS name of the EC2 instance"
+  value       = aws_instance.web.public_dns
+}
+
+output "jenkins_url" {
+  description = "Jenkins web interface URL"
+  value       = "http://${aws_instance.web.public_ip}:8080"
+}
+
+output "instance_type" {
+  description = "Instance type"
+  value       = aws_instance.web.instance_type
 }
